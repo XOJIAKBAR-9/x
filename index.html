@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marginalia — a personal journal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Link to external CSS -->
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">marginalia<span>.</span></div>
+    <nav id="nav">
+      <a data-view="home" class="active">Home</a>
+      <a data-view="about">About</a>
+      <a data-view="write">Write</a>
+    </nav>
+    <button class="nav-toggle" id="navToggle" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- HOME -->
+  <section class="view active" id="view-home">
+    <div class="hero">
+      <span class="kicker">Notes, essays, half-finished thoughts</span>
+      <h1>A running <em>archive</em> of things worth writing down.</h1>
+      <p class="lede">This is where I put down the thoughts that don't fit anywhere else — observations, questions I'm sitting with, small essays. Read a few, or write your own.</p>
+      <div class="rotating">
+        <span class="dot"></span>
+        <span class="txt" id="rotatingText">currently thinking about slow mornings</span>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Search entries…">
+      </div>
+      <div class="tags" id="tagFilters"></div>
+    </div>
+
+    <div class="catalog" id="catalog"></div>
+  </section>
+
+  <!-- POST DETAIL -->
+  <section class="view" id="view-post">
+    <div class="post-detail" id="postDetail"></div>
+  </section>
+
+  <!-- ABOUT -->
+  <section class="view" id="view-about">
+    <div class="about">
+      <h2>About this journal</h2>
+      <p>I started keeping this because I kept having thoughts in the shower that deserved better than to be forgotten by the time I found a towel.</p>
+      <p>There's no theme here on purpose — some entries are about work, some are about nothing in particular, and some are just questions I haven't answered yet. If something resonates, or you disagree entirely, I'd like to hear it.</p>
+      <p class="signature">— thanks for reading</p>
+    </div>
+  </section>
+
+  <!-- WRITE -->
+  <section class="view" id="view-write">
+    <div class="composer">
+      <h2>Write a new entry</h2>
+      <p class="hint">Publishes instantly to the top of your archive for this session.</p>
+      <div class="field">
+        <label for="wTitle">Title</label>
+        <input type="text" id="wTitle" placeholder="What are you thinking about?">
+      </div>
+      <div class="field">
+        <label for="wTags">Tags (comma separated)</label>
+        <input type="text" id="wTags" placeholder="life, work, half-baked-ideas">
+      </div>
+      <div class="field">
+        <label for="wBody">Entry</label>
+        <textarea id="wBody" placeholder="Write freely. Separate paragraphs with a blank line."></textarea>
+      </div>
+      <button class="publish-btn" id="publishBtn">Publish entry</button>
+      <div class="composer-note">This demo keeps new entries in memory for your current visit only. To make posts permanent on a live site, connect this form to a small backend, a headless CMS, or a static-site generator that rebuilds the <code>posts</code> array below from markdown files.</div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <span class="fnote">© <span id="year"></span> marginalia — built with plain HTML, no framework required</span>
+    <div class="flinks">
+      <a href="#">RSS</a>
+      <a href="#">Email</a>
+      <a href="#">Archive</a>
+    </div>
+  </div>
+</footer>
+
+<!-- Link to external JS -->
+<script src="script.js"></script>
+</body>
+</html>

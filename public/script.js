@@ -90,7 +90,7 @@
     }
 
     catalog.innerHTML = filtered.map(p => `
-      <article class="card" onclick="openPost('${p.slug}')">
+      <article class="card" id="card-${p.slug}" onclick="openPost('${p.slug}')">
         <div class="stamp">
           <span class="day">${formatDay(p.date)}</span>
           <span>${formatMonthYear(p.date)}</span>
@@ -99,6 +99,19 @@
           <h3>${escapeHtml(p.title)}</h3>
           <p>${escapeHtml(p.excerpt)}</p>
           <div class="meta-tags">${p.tags.map(t => `<span>${escapeHtml(t)}</span>`).join('')}</div>
+          <div class="card-actions">
+            <button onclick="editPost('${p.slug}', event)">Edit</button>
+            <button class="btn-delete" onclick="deletePost('${p.slug}', event)">Delete</button>
+          </div>
+          <div class="inline-edit-form" id="edit-form-${p.slug}" onclick="event.stopPropagation()">
+            <input type="text" id="edit-title-${p.slug}" value="${escapeHtmlAttr(p.title)}" placeholder="Title">
+            <input type="text" id="edit-tags-${p.slug}" value="${escapeHtmlAttr(p.tags.join(', '))}" placeholder="Tags (comma separated)">
+            <textarea id="edit-content-${p.slug}" placeholder="Entry">${escapeHtml(p.content.join('\n\n'))}</textarea>
+            <div class="edit-actions">
+              <button class="btn-cancel" onclick="cancelEdit('${p.slug}', event)">Cancel</button>
+              <button class="btn-save" onclick="updatePost('${p.slug}', event)">Save</button>
+            </div>
+          </div>
         </div>
       </article>
     `).join('');
@@ -108,6 +121,80 @@
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  function escapeHtmlAttr(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function editPost(slug, event) {
+    event.stopPropagation();
+    document.getElementById(`edit-form-${slug}`).classList.add('active');
+  }
+
+  function cancelEdit(slug, event) {
+    event.stopPropagation();
+    document.getElementById(`edit-form-${slug}`).classList.remove('active');
+  }
+
+  async function updatePost(slug, event) {
+    event.stopPropagation();
+    const title = document.getElementById(`edit-title-${slug}`).value.trim();
+    const tagsRaw = document.getElementById(`edit-tags-${slug}`).value.trim();
+    const body = document.getElementById(`edit-content-${slug}`).value.trim();
+
+    if (!title || !body) {
+      alert('Title and content are required.');
+      return;
+    }
+
+    const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : ['untagged'];
+    const paragraphs = body.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+
+    try {
+      const res = await fetch(`/api/posts/${slug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, tags, content: paragraphs.length ? paragraphs : [body] })
+      });
+      if (!res.ok) throw new Error('Request failed: ' + res.status);
+      const updatedPost = await res.json();
+      
+      const index = posts.findIndex(p => p.slug === slug);
+      if (index !== -1) {
+        posts[index] = updatedPost;
+      }
+      
+      renderTagFilters();
+      renderCatalog();
+    } catch (err) {
+      console.error('Failed to update:', err);
+      alert('Could not update this entry.');
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+  }
+
+  async function deletePost(slug, event) {
+    event.stopPropagation();
+    if (!confirm('Are you sure you want to delete this entry?')) return;
+
+    try {
+      const res = await fetch(`/api/posts/${slug}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 404) throw new Error('Request failed: ' + res.status);
+      
+      posts = posts.filter(p => p.slug !== slug);
+      
+      renderTagFilters();
+      renderCatalog();
+    } catch (err) {
+      console.error('Failed to delete:', err);
+      alert('Could not delete this entry.');
+    }
   }
 
   function openPost(slug){

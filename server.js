@@ -23,7 +23,8 @@ app.use(
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        scriptSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrcAttr: ["'unsafe-inline'"],
         imgSrc: ["'self'", 'data:'],
         upgradeInsecureRequests: null,
       },
@@ -105,6 +106,49 @@ app.post('/api/posts', async (req, res) => {
   } catch (err) {
     console.error('POST /api/posts failed:', err);
     res.status(500).json({ error: 'Could not save post' });
+  }
+});
+
+// PUT /api/posts/:slug — update an existing post
+app.put('/api/posts/:slug', async (req, res) => {
+  try {
+    const { title, tags, content } = req.body;
+
+    if (!title || !Array.isArray(content) || content.length === 0) {
+      return res.status(400).json({ error: 'title and content are required' });
+    }
+
+    const cleanTags = Array.isArray(tags) && tags.length ? tags : ['untagged'];
+    const excerpt = content[0].slice(0, 110) + (content[0].length > 110 ? '…' : '');
+
+    const { rows } = await pool.query(
+      `UPDATE posts SET title = $1, tags = $2, excerpt = $3, content = $4
+       WHERE slug = $5
+       RETURNING slug, title, date, tags, excerpt, content`,
+      [title, cleanTags, excerpt, content, req.params.slug]
+    );
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Post not found' });
+    res.json(rowToPost(rows[0]));
+  } catch (err) {
+    console.error('PUT /api/posts/:slug failed:', err);
+    res.status(500).json({ error: 'Could not update post' });
+  }
+});
+
+// DELETE /api/posts/:slug — delete a post
+app.delete('/api/posts/:slug', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM posts WHERE slug = $1',
+      [req.params.slug]
+    );
+
+    if (rowCount === 0) return res.status(404).json({ error: 'Post not found' });
+    res.status(204).send();
+  } catch (err) {
+    console.error('DELETE /api/posts/:slug failed:', err);
+    res.status(500).json({ error: 'Could not delete post' });
   }
 });
 

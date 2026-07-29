@@ -33,6 +33,18 @@
   // ---------------------------------------------------------------
   let activeTag = null;
   let searchTerm = '';
+  let isAdmin = sessionStorage.getItem('isAdmin') === 'true';
+
+  function updateAdminUI() {
+    const navWrite = document.getElementById('navWrite');
+    if (navWrite) {
+      navWrite.style.display = isAdmin ? 'inline-block' : 'none';
+    }
+    const toggle = document.getElementById('adminToggle');
+    if (toggle) {
+      toggle.textContent = isAdmin ? 'Exit Admin Mode' : 'Admin Mode';
+    }
+  }
 
   function allTags(){
     const t = new Set();
@@ -99,6 +111,7 @@
           <h3>${escapeHtml(p.title)}</h3>
           <p>${escapeHtml(p.excerpt)}</p>
           <div class="meta-tags">${p.tags.map(t => `<span>${escapeHtml(t)}</span>`).join('')}</div>
+          ${isAdmin ? `
           <div class="card-actions">
             <button onclick="editPost('${p.slug}', event)">Edit</button>
             <button class="btn-delete" onclick="deletePost('${p.slug}', event)">Delete</button>
@@ -112,6 +125,7 @@
               <button class="btn-save" onclick="updatePost('${p.slug}', event)">Save</button>
             </div>
           </div>
+          ` : ''}
         </div>
       </article>
     `).join('');
@@ -158,7 +172,10 @@
     try {
       const res = await fetch(`/api/posts/${slug}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-password': sessionStorage.getItem('adminPassword') || ''
+        },
         body: JSON.stringify({ title, tags, content: paragraphs.length ? paragraphs : [body] })
       });
       if (!res.ok) throw new Error('Request failed: ' + res.status);
@@ -184,7 +201,12 @@
     if (!confirm('Are you sure you want to delete this entry?')) return;
 
     try {
-      const res = await fetch(`/api/posts/${slug}`, { method: 'DELETE' });
+      const res = await fetch(`/api/posts/${slug}`, { 
+        method: 'DELETE',
+        headers: {
+          'x-admin-password': sessionStorage.getItem('adminPassword') || ''
+        }
+      });
       if (!res.ok && res.status !== 404) throw new Error('Request failed: ' + res.status);
       
       posts = posts.filter(p => p.slug !== slug);
@@ -207,10 +229,126 @@
       <h1>${escapeHtml(post.title)}</h1>
       <div class="p-tags">${post.tags.map(t => `<span>${escapeHtml(t)}</span>`).join('')}</div>
       <div class="post-content">${post.content.map(p => `<p>${escapeHtml(p)}</p>`).join('')}</div>
+      <div class="comments-section" id="commentsSection"></div>
     `;
     switchView('post', true);
     window.scrollTo({top:0, behavior:'instant'});
+    loadComments(slug);
   }
+
+  async function loadComments(slug) {
+    const section = document.getElementById('commentsSection');
+    section.innerHTML = '<div class="empty-state">Loading comments…</div>';
+    try {
+      const res = await fetch(`/api/posts/${slug}/comments`);
+      if(!res.ok) throw new Error('Failed to load');
+      const comments = await res.json();
+      renderComments(slug, comments);
+    } catch (err) {
+      console.error(err);
+      section.innerHTML = '<div class="empty-state">Could not load comments.</div>';
+    }
+  }
+
+  function renderComments(slug, comments) {
+    const section = document.getElementById('commentsSection');
+    
+    // Group replies
+    const topLevel = comments.filter(c => !c.parent_id);
+    const replies = comments.filter(c => c.parent_id);
+    
+    let html = '<h3>Comments</h3>';
+    
+    if (topLevel.length === 0) {
+      html += '<p class="no-comments">No comments yet. Be the first to share your thoughts.</p>';
+    } else {
+      html += '<div class="comment-list">';
+      topLevel.forEach(c => {
+        html += renderSingleComment(c, slug);
+        const childReplies = replies.filter(r => r.parent_id === c.id);
+        if (childReplies.length > 0) {
+          html += '<div class="replies-list">';
+          childReplies.forEach(r => {
+            html += renderSingleComment(r, slug, true);
+          });
+          html += '</div>';
+        }
+      });
+      html += '</div>';
+    }
+    
+    html += `
+      <div class="add-comment-box">
+        <textarea id="new-comment-body" placeholder="Add a comment..."></textarea>
+        <button onclick="submitComment('${slug}', null)">Post</button>
+      </div>
+    `;
+    
+    section.innerHTML = html;
+  }
+
+  function renderSingleComment(c, slug, isReply = false) {
+    const d = new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const authorBadge = c.is_author ? '<span class="author-badge">Author</span>' : '';
+    const avatar = c.is_author ? '<div class="avatar author-avatar">A</div>' : '<div class="avatar"></div>';
+    
+    return `
+      <div class="comment ${isReply ? 'reply' : ''}" id="comment-${c.id}">
+        ${avatar}
+        <div class="comment-body-wrap">
+          <div class="comment-meta">
+            <span class="comment-author">${c.is_author ? 'Author' : 'Anonymous'}</span>
+            ${authorBadge}
+            <span class="comment-date">${d}</span>
+          </div>
+          <div class="comment-text">${escapeHtml(c.body)}</div>
+          ${!isReply && isAdmin ? `<button class="reply-btn" onclick="showReplyForm(${c.id})">Reply</button>` : ''}
+          <div class="reply-form" id="reply-form-${c.id}" style="display:none;">
+            <textarea id="reply-body-${c.id}" placeholder="Write a reply..."></textarea>
+            <div class="reply-actions">
+               <button onclick="hideReplyForm(${c.id})">Cancel</button>
+               <button onclick="submitComment('${slug}', ${c.id})">Post</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  window.showReplyForm = (id) => {
+    document.getElementById(`reply-form-${id}`).style.display = 'block';
+  };
+  window.hideReplyForm = (id) => {
+    document.getElementById(`reply-form-${id}`).style.display = 'none';
+  };
+
+  window.submitComment = async (slug, parentId) => {
+    const bodyId = parentId ? `reply-body-${parentId}` : 'new-comment-body';
+    const bodyInput = document.getElementById(bodyId);
+    const body = bodyInput.value.trim();
+    if (!body) return;
+    
+    try {
+      const payload = { body, parent_id: parentId };
+      if (isAdmin) {
+        payload.secret_key = sessionStorage.getItem('adminPassword');
+      }
+      
+      const res = await fetch(`/api/posts/${slug}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!res.ok) throw new Error('Failed to post comment');
+      
+      bodyInput.value = '';
+      loadComments(slug); // reload comments
+    } catch (err) {
+      console.error(err);
+      alert('Could not post comment.');
+    }
+  };
 
   function switchView(name, skipNav){
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -260,7 +398,10 @@
     try {
       const res = await fetch('/api/posts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-admin-password': sessionStorage.getItem('adminPassword') || ''
+        },
         body: JSON.stringify({ title, tags, content: paragraphs.length ? paragraphs : [body] })
       });
       if(!res.ok) throw new Error('Request failed: ' + res.status);
@@ -292,5 +433,46 @@
   }, 3200);
 
   // init
+  updateAdminUI();
   document.getElementById('year').textContent = new Date().getFullYear();
   loadPosts();
+
+  const toggle = document.getElementById('adminToggle');
+  if (toggle) {
+    toggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (isAdmin) {
+        isAdmin = false;
+        sessionStorage.removeItem('isAdmin');
+        sessionStorage.removeItem('adminPassword');
+        updateAdminUI();
+        renderCatalog();
+        const activePost = document.querySelector('#view-post.active');
+        if (activePost) location.reload();
+      } else {
+        const pwd = prompt('Enter admin password:');
+        if (pwd) {
+          fetch('/api/verify-admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: pwd })
+          }).then(res => {
+            if (res.ok) {
+              isAdmin = true;
+              sessionStorage.setItem('isAdmin', 'true');
+              sessionStorage.setItem('adminPassword', pwd);
+              updateAdminUI();
+              renderCatalog();
+              const activePost = document.querySelector('#view-post.active');
+              if (activePost) location.reload();
+            } else {
+              alert('Incorrect password');
+            }
+          }).catch(err => {
+            console.error(err);
+            alert('Could not verify password');
+          });
+        }
+      }
+    });
+  }

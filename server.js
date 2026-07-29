@@ -49,6 +49,16 @@ function requireAdmin(req, res, next) {
   }
 }
 
+// POST /api/verify-admin
+app.post('/api/verify-admin', (req, res) => {
+  const { password } = req.body;
+  if (password === ADMIN_PASSWORD) {
+    res.json({ success: true });
+  } else {
+    res.status(403).json({ error: 'Incorrect password' });
+  }
+});
+
 function rowToPost(row) {
   return {
     slug: row.slug,

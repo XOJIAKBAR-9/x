@@ -38,6 +38,17 @@ app.use(compression());
 // API — backed by Postgres. See db/schema.sql to create the table.
 // ---------------------------------------------------------------
 
+const ADMIN_PASSWORD = 'admin1910';
+
+function requireAdmin(req, res, next) {
+  const auth = req.headers['x-admin-password'];
+  if (auth === ADMIN_PASSWORD) {
+    next();
+  } else {
+    res.status(403).json({ error: 'Forbidden' });
+  }
+}
+
 function rowToPost(row) {
   return {
     slug: row.slug,
@@ -79,7 +90,7 @@ app.get('/api/posts/:slug', async (req, res) => {
 
 // POST /api/posts — create a new post
 // body: { title: string, tags: string[], content: string[] }
-app.post('/api/posts', async (req, res) => {
+app.post('/api/posts', requireAdmin, async (req, res) => {
   try {
     const { title, tags, content } = req.body;
 
@@ -110,7 +121,7 @@ app.post('/api/posts', async (req, res) => {
 });
 
 // PUT /api/posts/:slug — update an existing post
-app.put('/api/posts/:slug', async (req, res) => {
+app.put('/api/posts/:slug', requireAdmin, async (req, res) => {
   try {
     const { title, tags, content } = req.body;
 
@@ -137,7 +148,7 @@ app.put('/api/posts/:slug', async (req, res) => {
 });
 
 // DELETE /api/posts/:slug — delete a post
-app.delete('/api/posts/:slug', async (req, res) => {
+app.delete('/api/posts/:slug', requireAdmin, async (req, res) => {
   try {
     const { rowCount } = await pool.query(
       'DELETE FROM posts WHERE slug = $1',
@@ -149,6 +160,43 @@ app.delete('/api/posts/:slug', async (req, res) => {
   } catch (err) {
     console.error('DELETE /api/posts/:slug failed:', err);
     res.status(500).json({ error: 'Could not delete post' });
+  }
+});
+
+// GET /api/posts/:slug/comments
+app.get('/api/posts/:slug/comments', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, post_slug, body, created_at, parent_id, is_author FROM comments WHERE post_slug = $1 ORDER BY created_at ASC',
+      [req.params.slug]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('GET /api/posts/:slug/comments failed:', err);
+    res.status(500).json({ error: 'Could not load comments' });
+  }
+});
+
+// POST /api/posts/:slug/comments
+app.post('/api/posts/:slug/comments', async (req, res) => {
+  try {
+    const { body, parent_id, secret_key } = req.body;
+    if (!body || body.trim() === '') {
+      return res.status(400).json({ error: 'Comment body is required' });
+    }
+
+    const isAuthor = secret_key === ADMIN_PASSWORD;
+    const { rows } = await pool.query(
+      `INSERT INTO comments (post_slug, body, parent_id, is_author)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, post_slug, body, created_at, parent_id, is_author`,
+      [req.params.slug, body.trim(), parent_id || null, isAuthor]
+    );
+
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('POST /api/posts/:slug/comments failed:', err);
+    res.status(500).json({ error: 'Could not save comment' });
   }
 });
 

@@ -38,7 +38,7 @@ app.use(compression());
 // API — backed by Postgres. See db/schema.sql to create the table.
 // ---------------------------------------------------------------
 
-const ADMIN_PASSWORD = 'admin1910';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 function requireAdmin(req, res, next) {
   const auth = req.headers['x-admin-password'];
